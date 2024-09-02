@@ -14,13 +14,13 @@ void remove_comment(char* line) {
 
 void process_line(char* line) {
     remove_comment(line);
-
-    // Further processing like tokenizing and parsing
+    
+    printf("Line : %s", line);
 }
 
 int main(int argc, char* argv[]) {
     char line[MAX_LINE_LEN];
-    FILE* file = fopen("program.ml", "r");
+    FILE* file = fopen(argv[1], "r");
     
     if (file == NULL) {
         printf("Could not open file.\n");
