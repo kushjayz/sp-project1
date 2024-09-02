@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #define MAX_LINE_LEN 256
 
@@ -50,6 +51,10 @@ void process_line(char* line) {
 }
 
 bool is_parsed_program(char *line) {
+    return is_parsed_program_item(line);
+}
+
+bool is_parsed_program_item(char *line) {
     return parsed_statement(line) || parsed_function(line)
 }
 
