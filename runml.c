@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
 		printf("Usage: %s <program.ml> \n", argv[0]);
 		return 1;
     }
+    //c project ongoing
     FILE* file = fopen(argv[1], "r");
     
     // If file is not opened successfully
