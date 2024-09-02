@@ -1,10 +1,41 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <ctype.h>
+#include <stdbool.h>
 
-#define MAX_IDENTIFIER_LEN 12
 #define MAX_LINE_LEN 256
 
+void remove_comment(char* line);
+void process_line(char* line);
+
+int main(int argc, char* argv[]) {
+    char line[MAX_LINE_LEN];
+    // Checking if the arguement is provided
+    if(argc != 2) {
+		printf("Error! File not provided!\n");
+		printf("Usage: %s <program.ml> \n", argv[0]);
+		return 1;
+    }
+    FILE* file = fopen(argv[1], "r");
+    
+    // If file is not opened successfully
+    if (file == NULL) {
+        printf("Could not open file %s.\n", argv[1]);
+        return EXIT_FAILURE;
+    }
+    
+    // Processing line by line
+    while (fgets(line, sizeof(line), file)) {
+        process_line(line);
+    }
+    
+    fclose(file);
+    return EXIT_SUCCESS;
+}
+
+
+
+// Removing comments
 void remove_comment(char* line) {
     char* comment = strchr(line, '#');
     if (comment != NULL) {
@@ -12,25 +43,20 @@ void remove_comment(char* line) {
     }
 }
 
+// Function which is used to process lines in the overall program
 void process_line(char* line) {
     remove_comment(line);
-    
-    printf("Line : %s", line);
+    is_parsed_program(line);
 }
 
-int main(int argc, char* argv[]) {
-    char line[MAX_LINE_LEN];
-    FILE* file = fopen(argv[1], "r");
-    
-    if (file == NULL) {
-        printf("Could not open file.\n");
-        return 1;
-    }
-    
-    while (fgets(line, sizeof(line), file)) {
-        process_line(line);
-    }
-    
-    fclose(file);
-    return 0;
+bool is_parsed_program(char *line) {
+    return parsed_statement(line) || parsed_function(line)
+}
+
+bool parsed_statement(char *line) {
+    return true;
+}
+
+bool parsed_function(char *line) {
+    return true;
 }
