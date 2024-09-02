@@ -5,9 +5,15 @@
 #include <ctype.h>
 
 #define MAX_LINE_LEN 256
+#define ASSIGNMENT_OPERATOR "<-"
+#define COMMENT '#'
 
 void remove_comment(char* line);
 void process_line(char* line);
+bool is_parsed_program(char *line);
+bool is_parsed_program_item(char *line);
+bool parsed_statement(char *line);
+bool parsed_function(char *line);
 
 int main(int argc, char* argv[]) {
     char line[MAX_LINE_LEN];
@@ -17,7 +23,7 @@ int main(int argc, char* argv[]) {
 		printf("Usage: %s <program.ml> \n", argv[0]);
 		return 1;
     }
-    //c project ongoing
+
     FILE* file = fopen(argv[1], "r");
     
     // If file is not opened successfully
@@ -39,7 +45,7 @@ int main(int argc, char* argv[]) {
 
 // Removing comments
 void remove_comment(char* line) {
-    char* comment = strchr(line, '#');
+    char* comment = strchr(line, COMMENT);
     if (comment != NULL) {
         *comment = '\0';
     }
@@ -56,10 +62,16 @@ bool is_parsed_program(char *line) {
 }
 
 bool is_parsed_program_item(char *line) {
-    return parsed_statement(line) || parsed_function(line)
+    return parsed_statement(line) || parsed_function(line);
 }
 
 bool parsed_statement(char *line) {
+    printf("%s", line);
+    char* tok = strtok(line, ASSIGNMENT_OPERATOR);
+    while(tok != NULL) {
+        printf("%s\n", tok);
+        tok = strtok(NULL, ASSIGNMENT_OPERATOR);
+    }
     return true;
 }
 
