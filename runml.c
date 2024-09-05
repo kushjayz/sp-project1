@@ -43,14 +43,18 @@ bool is_parse_assignment(Token** tokens);
 bool is_parse_factor(Token** tokens);
 bool is_parse_term(Token** tokens);
 bool is_parse_expression(Token** tokens);
+bool is_bracketed_expression(Token** tokens);
 bool is_parse_statement(Token** tokens);
 bool is_parsed_program_item(Token** tokens, FILE* file);
 bool is_parsed_program(Token** tokens, FILE* file);
 bool is_parsed_body(Token** tokens, FILE* file);
 bool is_parse_function_definition(Token** tokens, FILE* file);
+bool is_parse_function_call(Token** tokens);
 void report_error(const char *message);
 void printToken(Token** token, char* funcName);
 
+Token funcTokens[MAX_TOKENS];
+int funcCount = 0;
 int main(int argc, char* argv[]) {
     char line[MAX_LINE_LEN];
     // char next_line[MAX_LINE_LEN];
@@ -219,7 +223,7 @@ void process_line(char* line, FILE* file, bool is_body_lines) {
         }
 
         if(is_body_lines){
-            // Print tokens
+            // // Print tokens
             for (int i = 0; i < token_count; i++) {
                 printf("Token in body %d: %s (Type: %d)\n", i, tokens[i].value, tokens[i].type);
             }
@@ -268,9 +272,9 @@ bool is_parsed_program(Token** tokens, FILE* file) {
 }
 
 bool is_parsed_program_item(Token** tokens, FILE* file) {
-    if (is_parse_statement(tokens)) {
+    if (is_parse_function_definition(tokens, file)) {
         return true;
-    } else if (is_parse_function_definition(tokens, file)) {
+    } else if (is_parse_statement(tokens)) {
         return true;
     }
     printf("Not a valid program item\n");
@@ -278,7 +282,8 @@ bool is_parsed_program_item(Token** tokens, FILE* file) {
 }
 
 bool is_parse_function_definition(Token** tokens, FILE* file) {
-    // int no_body_statements = 0;
+
+    int no_statements = 0;
     char body_lines[256];
     // Check for 'function' keyword
     if ((*tokens)->type != TOKEN_FUNCTION) {
@@ -291,9 +296,12 @@ bool is_parse_function_definition(Token** tokens, FILE* file) {
     if ((*tokens)->type != TOKEN_IDENTIFIER) {
         printf("Expected function name after 'function'\n");
         return false;
+    } else {
+        // Consume the function name (identifier)
+        funcTokens[funcCount] = **tokens;
+        funcCount++;
+        (*tokens)++;
     }
-    // Consume the function name (identifier)
-    (*tokens)++;    
 
     // Parse zero or more function parameters (identifiers)
     while ((*tokens)->type == TOKEN_IDENTIFIER) {
@@ -304,16 +312,18 @@ bool is_parse_function_definition(Token** tokens, FILE* file) {
 
     while (fgets(body_lines, sizeof(body_lines), file) && body_lines[0] == '\t') {
         process_line(body_lines, file, true);
+        no_statements++;
     }
 
-    return true;  // Successfully parsed a function definition
+    if(no_statements > 0) {
+        return true;  // Successfully parsed a function definition
+    } else {
+        return false;
+    }
 }
 
 bool is_parse_statement(Token** tokens) {
-    // printToken(tokens, "is_parse_statement1");
-    if (is_parse_assignment(tokens)) {
-        return true;
-    } else if ((*tokens)->type == TOKEN_PRINT || (*tokens)->type == TOKEN_RETURN) {
+    if ((*tokens)->type == TOKEN_PRINT || (*tokens)->type == TOKEN_RETURN) {
             (*tokens)++;
             if(is_parse_expression(tokens)) {
                 return true;
@@ -321,17 +331,57 @@ bool is_parse_statement(Token** tokens) {
                 printf("Not a valid expression\n");
                 return false;
             }
-    // } else if ((*tokens)->type == TOKEN_IDENTIFIER && (*(tokens + 1))->type == TOKEN_PARENTHESIS && (*(tokens + 1))->value[0] == '(') {
+    } else if (is_parse_assignment(tokens)) {
+        return true;
+    } else if (is_parse_function_call(tokens)) {
+        return true;
+    } else {
+        printf("Not a valid statement\n");
+        return false;
+    }
+    // else if ((*tokens)->type == TOKEN_IDENTIFIER && (*(tokens + 1))->type == TOKEN_PARENTHESIS && (*(tokens + 1))->value[0] == '(') {
     //     return is_parse_functioncall(tokens);
     // }
+}
+
+bool is_parse_function_call(Token** tokens) {
+    if((*tokens)->type == TOKEN_IDENTIFIER) {
+        (*tokens)++;
+        if((*tokens)->type == TOKEN_OPEN_PARENTHESIS) {
+            (*tokens)++;
+            if (!is_parse_expression(tokens)) {
+                return false;
+            }
+            while ((*tokens)->type == TOKEN_COMMA) {
+                (*tokens)++; // Consume ","
+                if (!is_parse_expression(tokens)) {
+                    printf("Invalid function call\n");
+                    return false; // If no valid expression after the comma, return false
+                }
+            }
+
+            if((*tokens)->type == TOKEN_CLOSED_PARENTHESIS) {
+                (*tokens)++;
+                return true;
+            } else {
+                printf("Invalid function call\n");
+                return false;
+            }
+        } else {
+            printf("Invalid function call\n");
+            return false;
+        }
     } else {
-        // printf("Not a valid statement");
+        printf("Invalid function call\n");
         return false;
     }
 }
 
+
 bool is_parse_expression(Token** tokens) {
+    // printToken(tokens, "is_parse_expression");
     if (!is_parse_term(tokens)) {
+        printf("Is not a termed expression\n");
         return false;
     }
 
@@ -351,6 +401,7 @@ bool is_parse_expression(Token** tokens) {
 }
 
 bool is_parse_term(Token** tokens) {
+    printToken(tokens, "is_parse_term");
     if (!is_parse_factor(tokens)) {
         return false;
     }
@@ -371,12 +422,16 @@ bool is_parse_term(Token** tokens) {
 }
 
 bool is_parse_factor(Token** tokens) {
-    // TODO: Complete factor with functioncall and expression
+    printToken(tokens,"is_parse_factor");
     if (
         (*tokens)->type == TOKEN_REALCONSTANT ||
         (*tokens)->type == TOKEN_IDENTIFIER
     ) {
         (*tokens)++;
+        return true;
+    } else if(is_parse_function_call(tokens)) {
+        return true;
+    } else if(is_bracketed_expression(tokens)) {
         return true;
     } else {
         printf("Not a valid facor\n");
@@ -384,11 +439,25 @@ bool is_parse_factor(Token** tokens) {
     }
 }
 
+bool is_bracketed_expression(Token** tokens) {
+    // printToken(tokens,"is_bracketed_expression");
+    if ((*tokens)->type == TOKEN_OPEN_PARENTHESIS) {
+        (*tokens)++;
+        if(is_parse_expression(tokens)){
+            (*tokens)++;
+            if ((*tokens)->type == TOKEN_OPEN_PARENTHESIS){
+                (*tokens)++;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool is_parse_assignment(Token** tokens) {
     // printToken(tokens, "parseAssignment1");
     if ((*tokens)->type == TOKEN_IDENTIFIER) {
         (*tokens)++; // Consume identifier
-            // printToken(tokens, "parseAssignment2");
         if ((*tokens)->type == TOKEN_ASSIGNMENT) {
             (*tokens)++; // Consume "<-"
                 // printToken(tokens, "parseAssignment3");
@@ -399,9 +468,12 @@ bool is_parse_assignment(Token** tokens) {
         }
     } else {
         // printToken(tokens, "parseAssignment");
+        (*tokens)--;
         printf("Not a valid assignment\n");
         return false; // Not a valid assignment
     }
+    printf("Not a valid assignment\n");
+    (*tokens)--;
     return false;
 }
 
