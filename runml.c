@@ -38,18 +38,18 @@ typedef struct {
 
 Token get_next_token(char **line);
 void remove_comment(char* line);
-void process_line(char* line, FILE* file, bool is_body_lines);
-bool is_parse_assignment(Token** tokens);
-bool is_parse_factor(Token** tokens);
-bool is_parse_term(Token** tokens);
-bool is_parse_expression(Token** tokens);
-bool is_bracketed_expression(Token** tokens);
-bool is_parse_statement(Token** tokens);
-bool is_parsed_program_item(Token** tokens, FILE* file);
-bool is_parsed_program(Token** tokens, FILE* file);
-bool is_parsed_body(Token** tokens, FILE* file);
-bool is_parse_function_definition(Token** tokens, FILE* file);
-bool is_parse_function_call(Token** tokens);
+void process_line(char* line, FILE* r_file, FILE* w_file, bool is_body_lines);
+bool is_parse_assignment(Token** tokens, FILE* w_file);
+bool is_parse_factor(Token** tokens, FILE* w_file);
+bool is_parse_term(Token** tokens, FILE* w_file);
+bool is_parse_expression(Token** tokens, FILE* w_file);
+bool is_bracketed_expression(Token** tokens, FILE* w_file);
+bool is_parse_statement(Token** tokens, FILE* w_file);
+bool is_parsed_program_item(Token** tokens, FILE* r_file, FILE* w_file);
+bool is_parsed_program(Token** tokens, FILE* r_file, FILE* w_file);
+bool is_parsed_body(Token** tokens, FILE* r_file, FILE* w_file);
+bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file);
+bool is_parse_function_call(Token** tokens, FILE* w_file);
 void report_error(const char *message);
 void printToken(Token** token, char* funcName);
 bool is_custom_space(char c);
@@ -66,25 +66,35 @@ int main(int argc, char* argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    FILE* file = fopen(argv[1], "r");
+    FILE* r_file = fopen(argv[1], "r");
+    FILE* w_file = fopen("temp.c", "w");
     
     // If file is not opened successfully
-    if (file == NULL) {
+    if (r_file == NULL) {
         report_error("!Error: Could not open file provided!");
         exit(EXIT_FAILURE);
     }
-    
-    // Processing line by line
-    while (fgets(line, sizeof(line), file)) {
-        process_line(line, file, false);
+
+    if(w_file == NULL) {
+        report_error("!Error: Failed to write to file!");
+        exit(EXIT_FAILURE);
     }
+
+    fprintf(w_file, "#include <stdio.h>\nint main() {\n");
+    // Processing line by line
+    while (fgets(line, sizeof(line), r_file)) {
+        process_line(line, r_file, w_file, false);
+    }
+
+    fprintf(w_file, "\n}");
     
-    fclose(file);
+    fclose(r_file);
+    fclose(w_file);
     return EXIT_SUCCESS;
 }
 
 // Function which is used to process lines in the overall program
-void process_line(char* line, FILE* file, bool is_body_lines) {
+void process_line(char* line, FILE* r_file, FILE* w_file, bool is_body_lines) {
     remove_comment(line);
     if(strlen(line) > 0) {
         Token tokens[MAX_TOKENS];
@@ -104,11 +114,11 @@ void process_line(char* line, FILE* file, bool is_body_lines) {
         // }
 
         if(is_body_lines){
-            is_parsed_body(&token_ptr, file);
+            is_parsed_body(&token_ptr, r_file, w_file);
             return;
         }
 
-        if(!is_parsed_program(&token_ptr, file)) {
+        if(!is_parsed_program(&token_ptr, r_file, w_file)) {
             report_error("Invalid Syntax!");
         }
     }
@@ -248,11 +258,11 @@ bool is_custom_space(char c) {
 }
 
 
-bool is_parsed_body(Token** tokens, FILE* file) {
+bool is_parsed_body(Token** tokens, FILE* r_file, FILE* w_file) {
     if ((*tokens)->type == TOKEN_TAB) {
         (*tokens)++;
         while ((*tokens)->type != TOKEN_END) {
-            if (!is_parse_statement(tokens)) {
+            if (!is_parse_statement(tokens, w_file)) {
                 report_error("SyntaxError-Failed to Parse Statement!");
                 return false;
             }
@@ -261,9 +271,9 @@ bool is_parsed_body(Token** tokens, FILE* file) {
     return true;
 }
 
-bool is_parsed_program(Token** tokens, FILE* file) {
+bool is_parsed_program(Token** tokens, FILE* r_file, FILE* w_file) {
     while ((*tokens)->type != TOKEN_END) {
-        if (!is_parsed_program_item(tokens, file)) {
+        if (!is_parsed_program_item(tokens, r_file, w_file)) {
             report_error("SyntaxError-Failed to Parse Program!");
             return false;
         }
@@ -271,17 +281,17 @@ bool is_parsed_program(Token** tokens, FILE* file) {
     return true;
 }
 
-bool is_parsed_program_item(Token** tokens, FILE* file) {
-    if (is_parse_function_definition(tokens, file)) {
+bool is_parsed_program_item(Token** tokens, FILE* r_file, FILE* w_file) {
+    if (is_parse_function_definition(tokens, r_file, w_file)) {
         return true;
-    } else if (is_parse_statement(tokens)) {
+    } else if (is_parse_statement(tokens, w_file)) {
         return true;
     }
     report_error("SyntaxError-Failed to Parse Program Item!");
     return false; // No valid program item found
 }
 
-bool is_parse_function_definition(Token** tokens, FILE* file) {
+bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file) {
     int no_statements = 0;
     char body_lines[256];
     // Check for 'function' keyword
@@ -308,8 +318,8 @@ bool is_parse_function_definition(Token** tokens, FILE* file) {
         (*tokens)++;
     }
 
-    while (fgets(body_lines, sizeof(body_lines), file) && body_lines[0] == '\t') {
-        process_line(body_lines, file, true);
+    while (fgets(body_lines, sizeof(body_lines), r_file) && body_lines[0] == '\t') {
+        process_line(body_lines, r_file, w_file, true);
         no_statements++;
     }
 
@@ -321,18 +331,24 @@ bool is_parse_function_definition(Token** tokens, FILE* file) {
     }
 }
 
-bool is_parse_statement(Token** tokens) {
-    if (strcmp((*tokens)->value, "print") == 0 || strcmp((*tokens)->value, "return") == 0) { 
+bool is_parse_statement(Token** tokens, FILE* w_file) {
+    if (strcmp((*tokens)->value, "print") == 0 || strcmp((*tokens)->value, "return") == 0) {
+        if(strcmp((*tokens)->value, "print") == 0) {
+            fprintf(w_file, "printf(\"%%.6f\\n\", ");
+        } else if(strcmp((*tokens)->value, "return") == 0) {
+            fprintf(w_file, "return");
+        }
             (*tokens)++;
-            if(is_parse_expression(tokens)) {
+            if(is_parse_expression(tokens, w_file)) {
+                fprintf(w_file, ");\n");
                 return true;
             } else {
                 report_error("SyntaxError-Expression Expected after 'print' or 'return' ");
                 return false;
             }
-    } else if (is_parse_assignment(tokens)) {
+    } else if (is_parse_assignment(tokens, w_file)) {
         return true;
-    } else if (is_parse_function_call(tokens)) {
+    } else if (is_parse_function_call(tokens, w_file)) {
         return true;
     } else {
         report_error("SyntaxError-Failed to parse statement");
@@ -340,7 +356,7 @@ bool is_parse_statement(Token** tokens) {
     }
 }
 
-bool is_parse_function_call(Token** tokens) {
+bool is_parse_function_call(Token** tokens, FILE* w_file) {
     // Function name expected
     if((*tokens)->type == TOKEN_IDENTIFIER) {
         (*tokens)++; // Consume function name
@@ -350,13 +366,13 @@ bool is_parse_function_call(Token** tokens) {
             (*tokens)++; // Consume '('
 
             // Expect expression
-            if (!is_parse_expression(tokens)) {
+            if (!is_parse_expression(tokens, w_file)) {
                 report_error("InvalidFunctionCall-Expected expression after '('");
                 return false;
             }
             while ((*tokens)->type == TOKEN_COMMA) {
                 (*tokens)++; // Consume ","
-                if (!is_parse_expression(tokens)) {
+                if (!is_parse_expression(tokens, w_file)) {
                     report_error("InvalidFunctionCall-Expected expression after ','");
                     return false;
                 }
@@ -381,8 +397,8 @@ bool is_parse_function_call(Token** tokens) {
 }
 
 
-bool is_parse_expression(Token** tokens) {
-    if (!is_parse_term(tokens)) {
+bool is_parse_expression(Token** tokens, FILE* w_file) {
+    if (!is_parse_term(tokens, w_file)) {
         report_error("InvalidExpression-Expression has to have valid term");
         return false;
     }
@@ -392,7 +408,7 @@ bool is_parse_expression(Token** tokens) {
         // Consume the "+" or "-" operator
         (*tokens)++;
         // Parse the next expression after the operator
-        if (!is_parse_term(tokens)) {
+        if (!is_parse_term(tokens, w_file)) {
             report_error("InvalidExpression-Expression has to have valid term");
             return false;
         }
@@ -400,8 +416,8 @@ bool is_parse_expression(Token** tokens) {
     return true;  // Successfully parsed the expression
 }
 
-bool is_parse_term(Token** tokens) {
-    if (!is_parse_factor(tokens)) {
+bool is_parse_term(Token** tokens, FILE* w_file) {
+    if (!is_parse_factor(tokens, w_file)) {
         report_error("InvalidExpression-Term has to have valid factor");
         return false;
     }
@@ -412,7 +428,7 @@ bool is_parse_term(Token** tokens) {
         (*tokens)++;
         
         // Parse the next term after the operator
-        if (!is_parse_factor(tokens)) {
+        if (!is_parse_factor(tokens, w_file)) {
             report_error("InvalidExpression-Term has to have valid factor");
             return false;
         }
@@ -422,27 +438,30 @@ bool is_parse_term(Token** tokens) {
 }
 
 // TODO: CHECK LOGIC!
-bool is_parse_factor(Token** tokens) {
+bool is_parse_factor(Token** tokens, FILE* w_file) {
     if (
         (*tokens)->type == TOKEN_REALCONSTANT ||
         (*tokens)->type == TOKEN_IDENTIFIER
     ) {
+        fprintf(w_file, "%s", (*tokens)->value);
+        if((*tokens)->type == TOKEN_REALCONSTANT) {
+            fprintf(w_file, ";\n");
+        }
         (*tokens)++; // Consume constant or indentifier
         return true; // Factor can be constant or indentifier
-    } else if(is_parse_function_call(tokens)) {
+    } else if(is_parse_function_call(tokens, w_file)) {
         return true; // Factor can be functioncall
-    } else if(is_bracketed_expression(tokens)) {
+    } else if(is_bracketed_expression(tokens, w_file)) {
         return true; // Factor can be bracketed expression
     } else {
-        
         return false;
     }
 }
 
-bool is_bracketed_expression(Token** tokens) {
+bool is_bracketed_expression(Token** tokens, FILE* w_file) {
     if ((*tokens)->type == TOKEN_OPEN_PARENTHESIS) {
         (*tokens)++;
-        if(is_parse_expression(tokens)){
+        if(is_parse_expression(tokens, w_file)){
             (*tokens)++;
             if ((*tokens)->type == TOKEN_CLOSED_PARENTHESIS){
                 (*tokens)++;
@@ -461,12 +480,15 @@ bool is_bracketed_expression(Token** tokens) {
     }
 }
 
-bool is_parse_assignment(Token** tokens) {
-    if ((*tokens)->type == TOKEN_IDENTIFIER) {
+bool is_parse_assignment(Token** tokens, FILE* w_file) {
+    char variable[256];
+    if ((*tokens)->type == TOKEN_IDENTIFIER) { 
+        strcpy(variable, (*tokens)->value); 
         (*tokens)++; // Consume identifier
         if ((*tokens)->type == TOKEN_ASSIGNMENT) {
+            fprintf(w_file, "double %s = ", variable);
             (*tokens)++; // Consume "<-"
-            if (is_parse_expression(tokens)) {
+            if (is_parse_expression(tokens, w_file)) {
                 return true;
             } else {
                 report_error("InvalidAssignment-Expected expression");
