@@ -57,6 +57,7 @@ bool is_custom_space(char c);
 
 Token funcTokens[MAX_TOKENS];
 int funcCount = 0;
+bool is_double_return = false;
 
 int main(int argc, char* argv[]) {
     char line[MAX_LINE_LEN];
@@ -321,7 +322,7 @@ bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file) {
         report_error("SyntaxError-Expected function name!");
         return false;
     } else {
-        fprintf(w_file, "void %s ", (*tokens)->value);
+        fprintf(w_file, "double %s ", (*tokens)->value);
         // Consume the function name (identifier)
         funcTokens[funcCount] = **tokens;
         funcCount++;
@@ -373,20 +374,26 @@ bool is_parse_statement(Token** tokens, FILE* w_file) {
         } else if(strcmp((*tokens)->value, "return") == 0) {
             fprintf(w_file, "return ");
         }
-            (*tokens)++;
-            if(is_parse_expression(tokens, w_file, false, is_new_line)) {
-                if(is_print) {
-                    fprintf(w_file, ")");
-                }
-                fprintf(w_file, ";");
-                if(is_new_line) {
-                    fprintf(w_file, "\n");
-                }
-                return true;
-            } else {
-                report_error("SyntaxError-Expression Expected after 'print' or 'return' ");
-                return false;
+
+        (*tokens)++;
+        if(is_parse_expression(tokens, w_file, false, is_new_line)) {
+            if(is_print) {
+                fprintf(w_file, ")");
             }
+            fprintf(w_file, ";");
+            if(is_new_line) {
+                fprintf(w_file, "\n");
+            }
+            return true;
+        } else {
+            report_error("SyntaxError-Expression Expected after 'print' or 'return' ");
+            return false;
+        }
+
+        if(strcmp((*tokens)->value, "print") == 0) {
+            fprintf(w_file, "\nreturn 0.0;");
+        }
+
     } else if (is_parse_assignment(tokens, w_file, is_new_line)) {
         return true;
     } else if (is_parse_function_call(tokens, w_file, is_new_line)) {
@@ -425,9 +432,9 @@ bool is_parse_function_call(Token** tokens, FILE* w_file, bool is_new_line) {
 
             // Expecting ')' after parameters passed
             if((*tokens)->type == TOKEN_CLOSED_PARENTHESIS) {
-                fprintf(w_file, "%s;", (*tokens)->value);
+                fprintf(w_file, "%s", (*tokens)->value);
                 if(is_new_line) {
-                    fprintf(w_file, "\n");
+                    fprintf(w_file, ";\n");
                 }
                 (*tokens)++; // Consume ')'
                 return true;
@@ -556,7 +563,7 @@ bool is_parse_assignment(Token** tokens, FILE* w_file, bool is_new_line) {
 }
 
 void report_error(const char *message) {
-    // fprintf(stderr, "! %s\n", message);
+    fprintf(stderr, "! %s\n", message);
 }
 
 void printToken(Token** token, char* funcName) {
