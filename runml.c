@@ -101,8 +101,8 @@ int main(int argc, char* argv[]) {
     fclose(w_file);
 
     if (system("gcc -o object.o ml-temp.c") != 0) {
-        fprintf(stderr, "! Error: Compilation failed\n");
-        return 1;
+        report_error("Error: Compilation failed");
+        return EXIT_FAILURE;
     }
 
     system("./object.o");
@@ -388,7 +388,7 @@ bool is_parse_statement(Token** tokens, FILE* w_file) {
         if(strcmp((*tokens)->value, "print") == 0) {
             fprintf(w_file, "printf(\"%%.6f\\n\", ");
             is_print = true;
-            is_new_line = false; // this 
+            is_new_line = false;
         } else if(strcmp((*tokens)->value, "return") == 0) {
             fprintf(w_file, "return ");
         }
