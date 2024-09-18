@@ -1,3 +1,8 @@
+//  CITS2002 Project 1 2024
+//  Student1:   24205163   Kushan Sanka Jayasekera
+//  Student2:   24297797   Gayathri Kasunthika Kanakaratne
+//  Platform:   Linux
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +42,7 @@ typedef struct {
     TokenType type;
 } Token;
 
+
 Token get_next_token(char **line);
 void remove_comment(char* line);
 void process_line(char* line, FILE* r_file, FILE* w_file, bool is_body_lines);
@@ -64,21 +70,22 @@ int main(int argc, char* argv[]) {
 
     // Checking if the arguement is provided
     if(argc != 2) {
-        report_error("!Error! File not provided!");
+        report_error("Error! File not provided!");
         exit(EXIT_FAILURE);
     }
 
     FILE* r_file = fopen(argv[1], "r");
-    FILE* w_file = fopen("temp.c", "w");
     
     // If file is not opened successfully
     if (r_file == NULL) {
-        report_error("!Error: Could not open file provided!");
+        report_error("Error: Could not open file provided!");
         exit(EXIT_FAILURE);
     }
 
+    FILE* w_file = fopen("ml-temp.c", "w");
+
     if(w_file == NULL) {
-        report_error("!Error: Failed to write to file!");
+        report_error("Error: Failed to write to file!");
         exit(EXIT_FAILURE);
     }
 
@@ -93,15 +100,14 @@ int main(int argc, char* argv[]) {
     fclose(r_file);
     fclose(w_file);
 
-    if (system("gcc -o temp temp.c") != 0) {
+    if (system("gcc -o object.o ml-temp.c") != 0) {
         fprintf(stderr, "! Error: Compilation failed\n");
         return 1;
     }
 
-    system("./temp");
-
-    // remove("temp.c");
-    remove("temp");
+    system("./object.o");
+    remove("ml-temp.c");
+    remove("object.o");
 
     return EXIT_SUCCESS;
 }
@@ -115,9 +121,12 @@ void process_line(char* line, FILE* r_file, FILE* w_file, bool is_body_lines) {
         Token* token_ptr = tokens;
         char *line_ptr = line;
 
-        // Tokenize the line
+        // Tokenize the line and adding to an array
         while (token_count < MAX_TOKENS) {
             Token token = get_next_token(&line_ptr);
+            if (token.type == TOKEN_UNKNOWN) {
+                report_error("! Error: Unknown token encountered!");
+            } 
             tokens[token_count++] = token;
             if (token.type == TOKEN_END) break;
         }
@@ -132,7 +141,7 @@ void process_line(char* line, FILE* r_file, FILE* w_file, bool is_body_lines) {
     }
 }
 
-// Removing comments
+// Removing comments by replacing # with null byte
 void remove_comment(char* line) {
     char* comment = strchr(line, COMMENT);
     if (comment != NULL) {
@@ -153,6 +162,7 @@ Token get_next_token(char **line) {
         ch = *start;
     }
 
+    // switch case for each token to update the token type
     switch(ch){
         case '\t':
             token.type = TOKEN_TAB;
@@ -222,6 +232,7 @@ Token get_next_token(char **line) {
             size_t len = end - start;
             strncpy(token.value, start, len);
             if (strcmp(token.value, "print") == 0) {
+                // check for space requirement after 'print'
                 token.type = TOKEN_PRINT;
             } else if (strcmp(token.value, "function") == 0) {
                 // check for space requirement after 'function'
@@ -232,6 +243,7 @@ Token get_next_token(char **line) {
                     token.type = TOKEN_UNKNOWN;
                 }
             } else if (strcmp(token.value, "return") == 0) {
+                    // check for space requirement after 'return'
                     token.type = TOKEN_RETURN;
             } else {
                     token.type = TOKEN_IDENTIFIER;
@@ -265,11 +277,12 @@ bool is_custom_space(char c) {
     return (c == ' ' || c == '\n' || c == '\v' || c == '\f' || c == '\r');
 }
 
-
 bool is_parsed_body(Token** tokens, FILE* r_file, FILE* w_file) {
+    // If a tab is encountered it is still a part of the function definition
     if ((*tokens)->type == TOKEN_TAB) {
         (*tokens)++;
         while ((*tokens)->type != TOKEN_END) {
+            // Loop until token ends and has to be a statement
             if (!is_parse_statement(tokens, w_file)) {
                 report_error("SyntaxError-Failed to Parse Statement!");
                 return false;
@@ -279,8 +292,10 @@ bool is_parsed_body(Token** tokens, FILE* r_file, FILE* w_file) {
     return true;
 }
 
+// Based on the BNF for parsed program according to assignment specification
 bool is_parsed_program(Token** tokens, FILE* r_file, FILE* w_file) {
     while ((*tokens)->type != TOKEN_END) {
+        // Loop until token ends and has to be a program item
         if (!is_parsed_program_item(tokens, r_file, w_file)) {
             report_error("SyntaxError-Failed to Parse Program!");
             return false;
@@ -289,9 +304,12 @@ bool is_parsed_program(Token** tokens, FILE* r_file, FILE* w_file) {
     return true;
 }
 
+// Based on the BNF for program item  according to assignment specification
 bool is_parsed_program_item(Token** tokens, FILE* r_file, FILE* w_file) {
+    // Checking if it a defintion of a function
     if (is_parse_function_definition(tokens, r_file, w_file)) {
         return true;
+    // Checking if it a statement
     } else if (is_parse_statement(tokens, w_file)) {
         return true;
     }
@@ -299,6 +317,7 @@ bool is_parsed_program_item(Token** tokens, FILE* r_file, FILE* w_file) {
     return false; // No valid program item found
 }
 
+// Based on the BNF for function defintion according to assignment specification
 bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file) {
     int no_statements = 0;
     char body_lines[256];
@@ -334,6 +353,8 @@ bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file) {
         (*tokens)++;
     }
 
+    // looping to design function parameters dynamically
+    // Ex - (1, 2, 3, 4) or (1, 2)
     for(int i = 0; i < no_parameters; i++) {
         if (i != 0) {
             fprintf(w_file, ", ");
@@ -343,9 +364,10 @@ bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file) {
 
     fprintf(w_file, ") {\n");
 
+    // While there is a tab space it is still a part of function definition
     while (fgets(body_lines, sizeof(body_lines), r_file) && body_lines[0] == '\t') {
         process_line(body_lines, r_file, w_file, true);
-        no_statements++;
+        no_statements++; // Incrementing no of body statements
     }
 
     fprintf(w_file, "}\n");
@@ -358,6 +380,7 @@ bool is_parse_function_definition(Token** tokens, FILE* r_file, FILE* w_file) {
     }
 }
 
+// Based on the BNF for statement according to assignment specification
 bool is_parse_statement(Token** tokens, FILE* w_file) {
     bool is_print = false;
     bool is_new_line = true;
@@ -365,7 +388,7 @@ bool is_parse_statement(Token** tokens, FILE* w_file) {
         if(strcmp((*tokens)->value, "print") == 0) {
             fprintf(w_file, "printf(\"%%.6f\\n\", ");
             is_print = true;
-            is_new_line = false;
+            is_new_line = false; // this 
         } else if(strcmp((*tokens)->value, "return") == 0) {
             fprintf(w_file, "return ");
         }
@@ -513,7 +536,6 @@ bool is_bracketed_expression(Token** tokens, FILE* w_file) {
     if ((*tokens)->type == TOKEN_OPEN_PARENTHESIS) {
         (*tokens)++;
         if(is_parse_expression(tokens, w_file)){
-            (*tokens)++;
             if ((*tokens)->type == TOKEN_CLOSED_PARENTHESIS){
                 (*tokens)++;
                 return true;
